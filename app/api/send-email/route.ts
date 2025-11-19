@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     const plainText = text || body || (anomalies ? `Anomalies detected: ${anomalies.map((a: any) => a.type).join(', ')}` : 'Anomaly detected')
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000' 
 
     // Build a professional HTML email
     const timestamp = new Date().toLocaleString()
