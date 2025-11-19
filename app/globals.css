@@ -1,0 +1,144 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(0.98 0.01 256);
+  --foreground: oklch(0.15 0.04 256);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.04 256);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.04 256);
+  --primary: oklch(0.55 0.16 263);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.15 0.04 256);
+  --muted: oklch(0.95 0.01 256);
+  --muted-foreground: oklch(0.5 0.02 256);
+  --accent: oklch(0.6 0.2 263);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: oklch(0.65 0.2 30);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.93 0.01 256);
+  --input: oklch(0.95 0.01 256);
+  --ring: oklch(0.6 0.2 263);
+  --chart-1: oklch(0.6 0.2 263);
+  --chart-2: oklch(0.65 0.18 180);
+  --chart-3: oklch(0.7 0.15 100);
+  --chart-4: oklch(0.55 0.2 30);
+  --chart-5: oklch(0.75 0.12 150);
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: oklch(0.12 0.02 256);
+  --foreground: oklch(0.95 0.02 256);
+  --card: oklch(0.18 0.02 256);
+  --card-foreground: oklch(0.95 0.02 256);
+  --popover: oklch(0.18 0.02 256);
+  --popover-foreground: oklch(0.95 0.02 256);
+  --primary: oklch(0.65 0.2 263);
+  --primary-foreground: oklch(0.12 0.02 256);
+  --secondary: oklch(0.25 0.02 256);
+  --secondary-foreground: oklch(0.95 0.02 256);
+  --muted: oklch(0.25 0.02 256);
+  --muted-foreground: oklch(0.65 0.02 256);
+  --accent: oklch(0.7 0.22 263);
+  --accent-foreground: oklch(0.12 0.02 256);
+  --destructive: oklch(0.7 0.25 30);
+  --destructive-foreground: oklch(0.12 0.02 256);
+  --border: oklch(0.25 0.02 256);
+  --input: oklch(0.22 0.02 256);
+  --ring: oklch(0.7 0.22 263);
+  --chart-1: oklch(0.65 0.22 263);
+  --chart-2: oklch(0.7 0.2 180);
+  --chart-3: oklch(0.75 0.18 100);
+  --chart-4: oklch(0.7 0.22 30);
+  --chart-5: oklch(0.8 0.15 150);
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slide-in {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
+
+.animate-slide-in {
+  animation: slide-in 0.5s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.glass-morphism {
+  @apply backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/20;
+}
+
+.gradient-border {
+  @apply relative before:absolute before:inset-0 before:bg-gradient-to-r before:from-cyan-500 before:to-blue-600 before:rounded-lg before:-z-10;
+}
