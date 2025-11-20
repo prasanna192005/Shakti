@@ -26,7 +26,7 @@ export function PredictionsPage({ onNavigate, onLogout, currentPage, readings }:
 
   const getPredictions = async () => {
     try {
-      const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_KEY!)
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_PREDICTIONS_API_KEY!)
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
       // 🔥 REAL DATA from Firebase going to Gemini

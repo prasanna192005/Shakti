@@ -330,7 +330,7 @@ export default function DashboardPage() {
     switch (currentPage) {
       // case 'monitoring': return <MonitoringPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
       case 'predictions': return <PredictionsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} readings={readings} />
-      case 'anomalies': return <AnomaliesPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} anomalies={anomalies} onTrigger={triggerAnomaly} onAddEvent={addEvent} />
+      case 'anomalies': return <AnomaliesPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} anomalies={anomalies} onTrigger={triggerAnomaly} onAddEvent={addEvent} readings={readings} />
       case 'reports': return <ReportsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
       case 'settings': return <SettingsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
       default: return null

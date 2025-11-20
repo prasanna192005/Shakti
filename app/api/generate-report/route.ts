@@ -60,7 +60,7 @@ Provide ONLY:
     console.log('generate-report: prompt (first 500 chars):', prompt.slice(0, 500))
 
     // Modern Gemini 1.5 Flash endpoint (fast, cheap, reliable)
-    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`
+    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${process.env.GENERATIVE_API_KEY}`
 
     // Increase token budget to absolute max for output, disable thinking
     const maxTokens = 8000
