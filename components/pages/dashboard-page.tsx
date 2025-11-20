@@ -261,15 +261,32 @@ export default function DashboardPage() {
 
   // Today's energy (kWh)
   const energyToday = (() => {
-    if (!latest || readings.length < 2) return 0
-    const today = new Date().setHours(0, 0, 0, 0)
-    const todayReadings = readings.filter(r => r.timestamp >= today)
-    if (todayReadings.length < 2) return Number(((latest.pzem1.energy ?? 0) + (latest.pzem2.energy ?? 0)).toFixed(3))
+  if (readings.length === 0) return 0;
 
-    const first = todayReadings[todayReadings.length - 1]
-    const last = todayReadings[0]
-    return Number(((last.pzem1.energy + last.pzem2.energy) - (first.pzem1.energy + first.pzem2.energy)).toFixed(3))
-  })()
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const start = todayStart.getTime();
+
+  const today = readings.filter(r => r.timestamp >= start);
+  if (today.length < 2) return 0;
+
+  const earliest = today[today.length - 1];
+  const latest = today[0];
+
+  // For each PZEM, calculate safely
+  const calc = (eStart: number, eEnd: number) => {
+    // If device reset, eStart will be greater than eEnd
+    if (eStart > eEnd) return eEnd; // treat start as zero
+    return eEnd - eStart;
+  };
+
+  const p1 = calc(earliest.pzem1.energy, latest.pzem1.energy);
+  const p2 = calc(earliest.pzem2.energy, latest.pzem2.energy);
+
+  return Number((p1 + p2).toFixed(3));
+})();
+
+
 
   // Live Chart Data – Last 20 readings (Voltage in V)
   const pzem1Live = readings.slice(0, 20).map(r => ({
@@ -312,7 +329,7 @@ export default function DashboardPage() {
   if (currentPage !== 'dashboard') {
     switch (currentPage) {
       // case 'monitoring': return <MonitoringPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
-      case 'predictions': return <PredictionsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
+      case 'predictions': return <PredictionsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} readings={readings} />
       case 'anomalies': return <AnomaliesPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} anomalies={anomalies} onTrigger={triggerAnomaly} onAddEvent={addEvent} />
       case 'reports': return <ReportsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
       case 'settings': return <SettingsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
@@ -391,10 +408,10 @@ export default function DashboardPage() {
             <LineChart title="PZEM-2 Voltage (Live)" data={pzem2Live} color="rgb(251, 146, 60)" height={320} />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <AreaChart title="Daily Energy (7 Days)" data={dailyEnergy} color="rgb(34, 197, 94)" height={320} />
             <AnomalyCard anomalies={anomalies} onAddEvent={addEvent} />
-          </div>
+          </div> */}
 
           <EventLog events={events} />
         </main>

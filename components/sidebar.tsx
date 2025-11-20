@@ -13,7 +13,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose, onLogout, onNavigate, currentPage }: SidebarProps) {
   const navItems = [
     { label: 'Dashboard', id: 'dashboard' },
-    { label: 'Real-time Monitoring', id: 'monitoring' },
+    // { label: 'Real-time Monitoring', id: 'monitoring' },
     { label: 'Predictions', id: 'predictions' },
     { label: 'Anomalies', id: 'anomalies' },
     { label: 'Reports', id: 'reports' },
