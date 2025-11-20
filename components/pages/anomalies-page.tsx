@@ -43,8 +43,25 @@ export function AnomaliesPage({
 
     setLoading(true)
     try {
-      const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_KEY_ANOMALIES!)
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+// 1. Attempt to grab the pool (and fallback to the specific anomaly key)
+    const keyPool = process.env.GEMINI_KEYS_POOL;
+    let selectedKey = process.env.NEXT_PUBLIC_GEMINI_KEY_ANOMALIES;
+
+    // 2. Randomize if pool is available
+    if (keyPool) {
+      const keys = keyPool.split(',').map((k) => k.trim()).filter((k) => k);
+      if (keys.length > 0) {
+        selectedKey = keys[Math.floor(Math.random() * keys.length)];
+      }
+    }
+
+    // 3. Validate existence
+    if (!selectedKey) {
+       throw new Error("Missing API Key: Ensure GEMINI_KEYS_POOL or NEXT_PUBLIC_GEMINI_KEY_ANOMALIES is set.");
+    }
+
+    // 4. Initialize
+    const genAI = new GoogleGenerativeAI(selectedKey);      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
       // Take recent readings and reduce size if huge
       const latest = readings.slice(0, 50)

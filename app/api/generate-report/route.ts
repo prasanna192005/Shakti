@@ -22,10 +22,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const apiKey = process.env.GENERATIVE_API_KEY || process.env.GEN_API_KEY || process.env.GEMINI_API_KEY
+// 1. specific pool variable
+    const keyPool = process.env.GEMINI_KEYS_POOL;
+
+    // 2. Fallback logic: Check pool first, then individual keys if pool fails
+    let apiKey = null;
+
+    if (keyPool) {
+        // Split the string by comma, remove whitespace, and filter out empty entries
+        const keys = keyPool.split(',').map(k => k.trim()).filter(k => k);
+        
+        // Pick a random key from the array
+        if (keys.length > 0) {
+            apiKey = keys[Math.floor(Math.random() * keys.length)];
+        }
+    }
+
+    // 3. Final validation (checking if we successfully got a key)
+    // Use existing fallbacks if the pool didn't work
+    if (!apiKey) {
+        apiKey = process.env.GENERATIVE_API_KEY || process.env.GEN_API_KEY || process.env.GEMINI_API_KEY;
+    }
+
     if (!apiKey) {
       return Response.json(
-        { error: 'Missing API key (set GENERATIVE_API_KEY, GEN_API_KEY, or GEMINI_API_KEY in .env)' },
+        { error: 'Missing API key (set GEMINI_KEYS_POOL in .env)' },
         { status: 500 }
       )
     }

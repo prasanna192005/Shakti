@@ -26,8 +26,25 @@ export function PredictionsPage({ onNavigate, onLogout, currentPage, readings }:
 
   const getPredictions = async () => {
     try {
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_PREDICTIONS_API_KEY!)
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+// 1. Get the pool and clean it up
+    const keyPool = process.env.GEMINI_KEYS_POOL;
+    let selectedKey = process.env.GEMINI_PREDICTIONS_API_KEY; // Default fallback
+
+    // 2. If pool exists, pick a random one
+    if (keyPool) {
+      const keys = keyPool.split(',').map((k) => k.trim()).filter((k) => k);
+      if (keys.length > 0) {
+        selectedKey = keys[Math.floor(Math.random() * keys.length)];
+      }
+    }
+
+    // 3. Safety check before initializing
+    if (!selectedKey) {
+      throw new Error("No Gemini API keys available in environment variables.");
+    }
+
+    // 4. Initialize with the random key
+    const genAI = new GoogleGenerativeAI(selectedKey);      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
       // 🔥 REAL DATA from Firebase going to Gemini
       const recent = readings.slice(0, 40)
