@@ -1,46 +1,59 @@
-'use client'
+"use client"
 
-import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import React from "react"
+import {
+  LineChart as ReLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts"
 
-interface DataPoint {
-  time: string
-  value: number
-}
-
-interface LineChartProps {
+export function LineChart({
+  title,
+  data,
+  color = "rgb(14,165,233)",
+  height = 300,
+}: {
   title: string
-  data: DataPoint[]
-  color: string
-}
+  data: any[]
+  color?: string
+  height?: number
+}) {
+  if (!data || data.length === 0) return null
 
-export function LineChart({ title, data, color }: LineChartProps) {
+  // Auto-scale Y axis
+  const values = data.map((d) => d.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+
+  // Add padding for visibility
+  const padding = 5
+  const domain = [
+    Math.floor(min - padding),
+    Math.ceil(max + padding),
+  ]
+
   return (
-    <div className="rounded-2xl border border-border bg-card/80 backdrop-blur-sm p-6 shadow-lg">
-      <h3 className="text-lg font-semibold mb-6">{title}</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <RechartsLineChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis dataKey="time" stroke="var(--muted-foreground)" />
-          <YAxis stroke="var(--muted-foreground)" />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'var(--card)',
-              border: `1px solid var(--border)`,
-              borderRadius: '0.75rem',
-              boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-            }}
-            labelStyle={{ color: 'var(--foreground)' }}
-          />
+    <div className="rounded-xl border p-4 shadow-sm bg-card">
+      <h3 className="text-lg font-semibold mb-4">{title}</h3>
+
+      <ResponsiveContainer width="100%" height={height}>
+        <ReLineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+          <XAxis dataKey="time" />
+          <YAxis domain={domain} />
+          <Tooltip />
           <Line
             type="monotone"
             dataKey="value"
             stroke={color}
-            dot={false}
             strokeWidth={3}
-            isAnimationActive={true}
-            animationDuration={1000}
+            dot={false}
           />
-        </RechartsLineChart>
+        </ReLineChart>
       </ResponsiveContainer>
     </div>
   )

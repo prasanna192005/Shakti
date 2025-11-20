@@ -3,7 +3,7 @@ interface MetricCardProps {
   value: string
   change?: string
   status?: 'online' | 'offline'
-  icon: string
+  icon?: string
 }
 
 export function MetricCard({
@@ -11,7 +11,7 @@ export function MetricCard({
   value,
   change,
   status,
-  icon
+  icon,
 }: MetricCardProps) {
   return (
     <div className="rounded-2xl border border-border bg-card/80 backdrop-blur-sm p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:border-primary/50">
@@ -19,7 +19,7 @@ export function MetricCard({
         <div className="space-y-1">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{title}</h3>
         </div>
-        <span className="text-2xl">{icon}</span>
+        {icon ? <span className="text-2xl">{icon}</span> : <span className="text-2xl" aria-hidden="true"></span>}
       </div>
       
       <div className="space-y-3">

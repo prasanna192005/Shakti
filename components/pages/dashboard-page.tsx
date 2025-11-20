@@ -6,15 +6,9 @@ import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
 import { GaugeComponent } from '@/components/gauge'
 import { MetricCard } from '@/components/metric-card'
-import { PredictionCard } from '@/components/prediction-card'
 import { LineChart } from '@/components/charts/line-chart'
 import { AreaChart } from '@/components/charts/area-chart'
 import { AnomalyCard } from '@/components/anomaly-card'
-import { NILMChart } from '@/components/charts/nilm-chart'
-import { Heatmap } from '@/components/heatmap'
-import { GeoMap } from '@/components/geo-map'
-import { InsightsCard } from '@/components/insights-card'
-import { AutomationRules } from '@/components/automation-rules'
 import { EventLog } from '@/components/event-log'
 import { MonitoringPage } from './monitoring-page'
 import { PredictionsPage } from './predictions-page'
@@ -22,221 +16,386 @@ import { AnomaliesPage } from './anomalies-page'
 import { ReportsPage } from './reports-page'
 import { SettingsPage } from './settings-page'
 
-// Mock data generators
-const generateVoltageData = () =>
-  Array.from({ length: 12 }, (_, i) => ({
-    time: `${23 - i}:00`,
-    value: 230 + Math.random() * 30 - 15,
-  })).reverse()
+const FIREBASE_URL = 'https://majorhaiyeproject-default-rtdb.firebaseio.com/NEW_DATA.json'
+const FIREBASE_PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz'
 
-const generateEnergyData = () =>
-  Array.from({ length: 7 }, (_, i) => ({
-    day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
-    value: 45 + Math.random() * 35,
-  }))
+const decodeFirebasePushId = (id: string) => {
+  let timestamp = 0
+  for (let i = 0; i < 8 && i < id.length; i += 1) {
+    const value = FIREBASE_PUSH_CHARS.indexOf(id[i])
+    if (value === -1) return Date.now()
+    timestamp = timestamp * 64 + value
+  }
+  return timestamp
+}
 
-const generateAnomalies = (): Array<{ type: string; severity: 'critical' | 'warning' | 'info' }> => {
-  const data = Array.from({ length: 50 }, () => 235 + Math.random() * 20 - 10)
-  const energyData = Array.from({ length: 50 }, () => 42 + Math.random() * 15)
-  const anomalies: Array<{ type: string; severity: 'critical' | 'warning' | 'info' }> = []
+// Robust numeric coercion helper
+const toNumberSafe = (v: any, fallback = 0) => {
+  const n = typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN)
+  return Number.isFinite(n) ? n : fallback
+}
 
-  for (let i = 0; i < data.length; i++) {
-    if (i > 0 && energyData[i] > energyData[i - 1] * 1.4) {
-      anomalies.push({ type: 'energy_theft', severity: 'critical' })
-    }
-    if (data[i] > 250) {
-      anomalies.push({ type: 'high_voltage', severity: 'warning' })
-    }
+// More robust timestamp parser that accepts:
+// - "YYYY-MM-DD_HH:MM:SS"
+// - "YYYY-MM-DD HH:MM:SS"
+// - ISO-like "YYYY-MM-DDTHH:MM:SS"
+const parseNewDataTimestamp = (stamp: string) => {
+  if (!stamp) return Date.now()
+  // Normalize common separators
+  let s = String(stamp).trim()
+  s = s.replace(/_/g, 'T').replace(/ /g, 'T') // YYYY-MM-DDTHH:MM:SS
+
+  // Try Date.parse directly
+  let parsed = Date.parse(s)
+  if (Number.isFinite(parsed)) return parsed
+
+  // Try adding 'Z' (UTC) if missing timezone
+  parsed = Date.parse(s + 'Z')
+  if (Number.isFinite(parsed)) return parsed
+
+  // If s still not parseable, try splitting components (YYYY-MM-DDTHH:MM:SS)
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/)
+  if (m) {
+    const year = Number(m[1]), month = Number(m[2]) - 1, day = Number(m[3])
+    const hour = Number(m[4]), minute = Number(m[5]), second = Number(m[6] || '0')
+    // Use local time (keeps behavior consistent in client's timezone)
+    return new Date(year, month, day, hour, minute, second).getTime()
   }
 
-  return [...new Map(anomalies.map((a) => [a.type, a])).values()]
+  // Last fallback: if stamp looks numeric (legacy push id), handle that
+  const numeric = Number(stamp)
+  if (Number.isFinite(numeric)) {
+    if (numeric > 1e12) return numeric
+    if (numeric > 1e9) return numeric * 1000
+  }
+
+  return Date.now()
 }
+
+interface PZEM {
+  voltage: number
+  current: number
+  power: number
+  energy: number
+  frequency: number
+  powerFactor: number
+}
+
+interface Reading {
+  id: string
+  timestamp: number
+  pzem1: PZEM
+  pzem2: PZEM
+  activeSource?: number
+}
+
+type Anomaly = { type: string; severity: 'critical' | 'warning' | 'info' }
 
 export default function DashboardPage() {
   const { logout } = useAuth()
   const [currentPage, setCurrentPage] = useState('dashboard')
-  const [voltageData, setVoltageData] = useState(generateVoltageData())
-  const [energyData, setEnergyData] = useState(generateEnergyData())
-  const [anomalies, setAnomalies] = useState<Array<{ type: string; severity: 'critical' | 'warning' | 'info' }>>(generateAnomalies())
-  const [currentValues, setCurrentValues] = useState({
-    voltage: 235,
-    current: 12.5,
-    powerFactor: 0.95,
-    energyToday: 248.5,
-    gridStatus: 'ONLINE',
-  })
-  const [events, setEvents] = useState<Array<{ id: number; timestamp: Date; type: 'alert' | 'info' | 'warning' | 'success'; message: string }>>([
-    { id: 1, timestamp: new Date(Date.now() - 300000), type: 'alert', message: 'High voltage detected' },
-    { id: 2, timestamp: new Date(Date.now() - 600000), type: 'info', message: 'Grid synchronized' },
-  ])
+  const [readings, setReadings] = useState<Reading[]>([])
+  const [latest, setLatest] = useState<Reading | null>(null)
+  const [events, setEvents] = useState<Array<{ id: number; timestamp: Date; type: 'alert' | 'info' | 'warning' | 'success'; message: string }>>([])
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentValues((prev) => ({
-        voltage: 230 + Math.random() * 30 - 15,
-        current: 8 + Math.random() * 10,
-        powerFactor: 0.92 + Math.random() * 0.07,
-        energyToday: prev.energyToday + Math.random() * 2,
-        gridStatus: Math.random() > 0.05 ? 'ONLINE' : 'OFFLINE',
-      }))
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const predictedPower = (currentValues.energyToday * 1.05 - Math.random() * 5).toFixed(1)
+  const [loading, setLoading] = useState(true)
 
   const addEvent = (type: 'alert' | 'info' | 'warning' | 'success', message: string) => {
-    const newEvent: { id: number; timestamp: Date; type: 'alert' | 'info' | 'warning' | 'success'; message: string } = {
-      id: events.length + 1,
+    setEvents(prev => [{
+      id: Date.now(),
       timestamp: new Date(),
       type,
       message,
-    }
-    setEvents((prev) => [newEvent, ...prev.slice(0, 19)])
+    }, ...prev.slice(0, 19)])
   }
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    const fetchLive = async () => {
+      try {
+        const res = await fetch(FIREBASE_URL + '?t=' + Date.now(), {
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+
+        if (!res.ok) throw new Error('Network error')
+
+        const data = await res.json()
+
+        const basePzem: PZEM = { voltage: 0, current: 0, power: 0, energy: 0, frequency: 0, powerFactor: 0 }
+        const normalizePzem = (raw: any): PZEM => {
+          // Coerce numeric strings to numbers safely
+          return {
+            voltage: toNumberSafe(raw?.voltage ?? raw?.V ?? raw?.v, 0),
+            current: toNumberSafe(raw?.current ?? raw?.I ?? raw?.i, 0),
+            power: toNumberSafe(raw?.power ?? raw?.P ?? raw?.p, 0),
+            energy: toNumberSafe(raw?.energy ?? raw?.E ?? raw?.e, 0),
+            frequency: toNumberSafe(raw?.frequency ?? raw?.F ?? raw?.f, 0),
+            powerFactor: toNumberSafe(raw?.powerFactor ?? raw?.pf ?? raw?.PF ?? raw?.power_factor, 0),
+          }
+        }
+
+        const mapNewDataFormat = () => {
+          if (!data || typeof data !== 'object') return null
+          if (!('pzem1' in data) && !('pzem2' in data)) return null
+
+          const combined: Record<string, { timestamp: number; pzem1: PZEM; pzem2: PZEM }> = {}
+
+          const ensureEntry = (stamp: string) => {
+            if (!combined[stamp]) {
+              combined[stamp] = {
+                timestamp: parseNewDataTimestamp(stamp),
+                pzem1: { ...basePzem },
+                pzem2: { ...basePzem },
+              }
+            }
+            return combined[stamp]
+          }
+
+          Object.entries((data as any)?.pzem1 || {}).forEach(([stamp, payload]) => {
+            const entry = ensureEntry(stamp)
+            entry.pzem1 = normalizePzem(payload)
+          })
+
+          Object.entries((data as any)?.pzem2 || {}).forEach(([stamp, payload]) => {
+            const entry = ensureEntry(stamp)
+            entry.pzem2 = normalizePzem(payload)
+          })
+
+          return Object.entries(combined).map(([id, entry]) => ({
+            id,
+            timestamp: entry.timestamp,
+            pzem1: entry.pzem1,
+            pzem2: entry.pzem2,
+          }))
+        }
+
+        const mapLegacyFormat = () => Object.entries(data || {})
+          .map(([id, val]: [string, any]) => {
+            const pushTimestamp = decodeFirebasePushId(id)
+            return {
+              id,
+              timestamp: (val?.timestamp ? parseNewDataTimestamp(String(val.timestamp)) : normalizeTimestamp(val?.timestamp, pushTimestamp)),
+              pzem1: (val?.pzem1 ? {
+                voltage: toNumberSafe(val.pzem1.voltage, 0),
+                current: toNumberSafe(val.pzem1.current, 0),
+                power: toNumberSafe(val.pzem1.power, 0),
+                energy: toNumberSafe(val.pzem1.energy, 0),
+                frequency: toNumberSafe(val.pzem1.frequency, 0),
+                powerFactor: toNumberSafe(val.pzem1.powerFactor ?? val.pzem1.pf, 0),
+              } : basePzem),
+              pzem2: (val?.pzem2 ? {
+                voltage: toNumberSafe(val.pzem2.voltage, 0),
+                current: toNumberSafe(val.pzem2.current, 0),
+                power: toNumberSafe(val.pzem2.power, 0),
+                energy: toNumberSafe(val.pzem2.energy, 0),
+                frequency: toNumberSafe(val.pzem2.frequency, 0),
+                powerFactor: toNumberSafe(val.pzem2.powerFactor ?? val.pzem2.pf, 0),
+              } : basePzem),
+              activeSource: val?.activeSource,
+            }
+          })
+
+        const normalizeTimestamp = (raw: unknown, fallback: number) => {
+          const numeric = typeof raw === 'number' ? raw : Number(raw as any)
+          if (!Number.isFinite(numeric)) return fallback
+          if (numeric > 1e12) return numeric
+          if (numeric > 1e9) return numeric * 1000
+          return fallback
+        }
+
+        const readingsArray: Reading[] = (mapNewDataFormat() ?? mapLegacyFormat())
+          .sort((a, b) => b.timestamp - a.timestamp)
+
+        if (readingsArray.length === 0) {
+          // If no data present, do not flip loading off - keep trying
+          return
+        }
+
+        setReadings(readingsArray)
+        setLatest(readingsArray[0])
+        setLoading(false)
+
+        // Live anomaly detection (same rules as before)
+        const p1 = readingsArray[0].pzem1
+        const p2 = readingsArray[0].pzem2
+        const newAnoms: Anomaly[] = []
+
+        if (p1.voltage > 260 || p2.voltage > 260) newAnoms.push({ type: 'High Voltage Detected (>260V)', severity: 'critical' })
+        if (p1.voltage < 180 || p2.voltage < 180) newAnoms.push({ type: 'Low Voltage Alert (<180V)', severity: 'warning' })
+
+        if (p1.power > 6000 || p2.power > 6000) newAnoms.push({ type: 'Circuit Overload (>6kW)', severity: 'critical' })
+
+        if (p1.voltage > 200 && p1.current < 0.01) newAnoms.push({ type: 'PZEM-1: Suspiciously Low Load', severity: 'warning' })
+        if (p2.voltage > 200 && p2.current < 0.01) newAnoms.push({ type: 'PZEM-2: Suspiciously Low Load', severity: 'warning' })
+
+        if (newAnoms.length > 0) {
+          setAnomalies(prev => {
+            const next: Anomaly[] = [...newAnoms, ...prev]
+            return next.slice(0, 10)
+          })
+          newAnoms.forEach(a => {
+            if (a.severity === 'critical') addEvent('alert', a.type)
+            else if (a.severity === 'warning') addEvent('warning', a.type)
+          })
+        }
+
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Live fetch error:', err)
+          addEvent('warning', 'Live connection interrupted')
+        }
+      }
+    }
+
+    fetchLive()
+    const interval = setInterval(fetchLive, 2000)
+
+    return () => {
+      controller.abort()
+      clearInterval(interval)
+    }
+  }, [])
+
+  // Today's energy (kWh)
+  const energyToday = (() => {
+    if (!latest || readings.length < 2) return 0
+    const today = new Date().setHours(0, 0, 0, 0)
+    const todayReadings = readings.filter(r => r.timestamp >= today)
+    if (todayReadings.length < 2) return Number(((latest.pzem1.energy ?? 0) + (latest.pzem2.energy ?? 0)).toFixed(3))
+
+    const first = todayReadings[todayReadings.length - 1]
+    const last = todayReadings[0]
+    return Number(((last.pzem1.energy + last.pzem2.energy) - (first.pzem1.energy + first.pzem2.energy)).toFixed(3))
+  })()
+
+  // Live Chart Data – Last 20 readings (Voltage in V)
+  const pzem1Live = readings.slice(0, 20).map(r => ({
+    time: new Date(r.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    value: Number(r.pzem1.voltage.toFixed(1))
+  })).reverse()
+
+  const pzem2Live = readings.slice(0, 20).map(r => ({
+    time: new Date(r.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    value: Number(r.pzem2.voltage.toFixed(1))
+  })).reverse()
+
+  // Daily Energy (Last 7 Days)
+  const dailyEnergy = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date()
+    date.setDate(date.getDate() - (6 - i))
+    date.setHours(0, 0, 0, 0)
+    const next = new Date(date)
+    next.setDate(next.getDate() + 1)
+
+    const dayReadings = readings.filter(r => r.timestamp >= date.getTime() && r.timestamp < next.getTime())
+    if (dayReadings.length < 2) return { day: date.toLocaleDateString('en-IN', { weekday: 'short' }), value: 0 }
+
+    const first = dayReadings[dayReadings.length - 1]
+    const last = dayReadings[0]
+    const energy = (last.pzem1.energy + last.pzem2.energy) - (first.pzem1.energy + first.pzem2.energy)
+
+    return { day: date.toLocaleDateString('en-IN', { weekday: 'short' }), value: Number(energy.toFixed(3)) }
+  })
 
   const triggerAnomaly = () => {
-    const newAnomaly: { type: string; severity: 'critical' | 'warning' | 'info' } = { type: 'high_voltage', severity: 'critical' }
-    setAnomalies((prev) => {
-      const updated = [newAnomaly, ...prev]
-      return updated.slice(0, 5)
+    addEvent('alert', 'DEMO: Critical Anomaly Triggered!')
+    setAnomalies(prev => {
+      const next: Anomaly[] = [{ type: 'Manual Test Anomaly', severity: 'critical' }, ...prev]
+      return next.slice(0, 10)
     })
-    setCurrentValues((prev) => ({
-      ...prev,
-      voltage: 270 + Math.random() * 20,
-    }))
-    const message = 'Critical: High voltage anomaly triggered - Voltage spike detected above safe threshold'
-    addEvent('alert', message)
-
-    // Send email alert via server API
-    const recipient = 'prasanna.pandharikar22@spit.ac.in'
-    const subject = 'Shakti Smart Energy Grid - Critical Grid Alert'
-    const anomaliesForEmail = [newAnomaly, ...anomalies].slice(0, 5)
-
-    fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipient, subject, text: message, anomalies: anomaliesForEmail }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const text = await res.text()
-          throw new Error(text || 'Failed to send email')
-        }
-        addEvent('info', `Alert email delivered to ${recipient}`)
-      })
-      .catch((err) => {
-        console.error('send-email error', err)
-        addEvent('warning', `Failed to send alert email: ${err.message}`)
-      })
   }
 
-  if (currentPage === 'monitoring') return <MonitoringPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
-  if (currentPage === 'predictions') return <PredictionsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
-  if (currentPage === 'anomalies') return <AnomaliesPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} anomalies={anomalies} onTrigger={triggerAnomaly} onAddEvent={addEvent} />
-  if (currentPage === 'reports') return <ReportsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
-  if (currentPage === 'settings') return <SettingsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
+  // Page routing
+  if (currentPage !== 'dashboard') {
+    switch (currentPage) {
+      // case 'monitoring': return <MonitoringPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
+      case 'predictions': return <PredictionsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
+      case 'anomalies': return <AnomaliesPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} anomalies={anomalies} onTrigger={triggerAnomaly} onAddEvent={addEvent} />
+      case 'reports': return <ReportsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
+      case 'settings': return <SettingsPage onNavigate={setCurrentPage} onLogout={logout} currentPage={currentPage} />
+      default: return null
+    }
+  }
+
+  if (loading || !latest) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center flex-col gap-6">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600"></div>
+        <p className="text-2xl font-bold">Shakti Smart Grid</p>
+        <p className="text-lg text-muted-foreground">Establishing live connection...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onLogout={logout} onNavigate={setCurrentPage} currentPage={currentPage} />
 
-      {/* Main content wrapper with sidebar offset */}
       <div className="flex-1 flex flex-col w-full md:pl-64">
-        <Navbar
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-          onLogout={logout}
-        />
+        <Navbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} onLogout={logout} />
 
-        <main className="p-6 space-y-6 flex-1 overflow-auto">
-          <div className="space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight">Energy Grid Monitor</h2>
-            <p className="text-muted-foreground">Real-time monitoring and predictive analytics</p>
+        <main className="p-6 space-y-8">
+          {/* Header */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight flex items-center gap-3">
+                Shakti Smart Grid
+                <span className="flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+              </h1>
+              <p className="text-lg text-muted-foreground">Real-Time • Dual PZEM • Current in mA • Tamper Alerts</p>
+            </div>
+            <button onClick={triggerAnomaly} className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all">
+              Trigger Anomaly (Demo)
+            </button>
           </div>
 
-          <button
-            onClick={triggerAnomaly}
-            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors duration-200"
-          >
-            Trigger Anomaly (Demo)
-          </button>
-
-          {/* Gauges */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* LIVE GAUGES – Now in mA */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <GaugeComponent title="PZEM-1 Voltage" value={latest.pzem1.voltage} max={300} unit="V" color="from-blue-500 to-cyan-500" />
             <GaugeComponent
-              title="Voltage"
-              value={currentValues.voltage}
-              max={300}
-              unit="V"
-              color="from-cyan-500 to-blue-600"
+              title="PZEM-1 Current"
+              value={+(latest.pzem1.current * 1000).toFixed(1)}
+              max={30000}
+              unit="mA"
+              color="from-green-500 to-emerald-600"
             />
+            <GaugeComponent title="PZEM-2 Voltage" value={latest.pzem2.voltage} max={300} unit="V" color="from-orange-500 to-red-600" />
             <GaugeComponent
-              title="Current"
-              value={currentValues.current}
-              max={20}
-              unit="A"
-              color="from-emerald-500 to-teal-600"
-            />
-            <GaugeComponent
-              title="Power Factor"
-              value={currentValues.powerFactor}
-              max={1}
-              unit="PF"
+              title="PZEM-2 Current"
+              value={+(latest.pzem2.current * 1000).toFixed(1)}
+              max={30000}
+              unit="mA"
               color="from-purple-500 to-pink-600"
-              decimals={2}
             />
           </div>
 
           {/* Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <MetricCard
-              title="Total Energy Today"
-              value={`${currentValues.energyToday.toFixed(1)} kWh`}
-              change="+12.5% vs yesterday"
-              icon="⚡"
-            />
-            <MetricCard
-              title="Grid Status"
-              value={currentValues.gridStatus}
-              status={currentValues.gridStatus === 'ONLINE' ? 'online' : 'offline'}
-              icon="🔗"
-            />
-            <PredictionCard
-              title="Predicted Power (Next Hour)"
-              value={`${predictedPower} kWh`}
-              trend="stable"
-              onAddEvent={addEvent}
-            />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <MetricCard title="PZEM-1 Power" value={`${latest.pzem1.power.toFixed(1)} W`} change={latest.pzem1.current > 0.01 ? 'LIVE' : 'Standby'} />
+            <MetricCard title="PZEM-1 Current" value={`${(latest.pzem1.current * 1000).toFixed(1)} mA`} change={latest.pzem1.current > 0.005 ? 'Active' : 'Idle'} />
+            <MetricCard title="PZEM-2 Power" value={`${latest.pzem2.power.toFixed(1)} W`} change={latest.pzem2.current > 0.01 ? 'LIVE' : 'Standby'} />
+            <MetricCard title="PZEM-2 Current" value={`${(latest.pzem2.current * 1000).toFixed(1)} mA`} change={latest.pzem2.current > 0.005 ? 'Active' : 'Idle'} />
+            <MetricCard title="Total Power" value={`${(latest.pzem1.power + latest.pzem2.power).toFixed(1)} W`} />
+            <MetricCard title="Energy Today" value={`${energyToday} kWh`} />
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <LineChart title="Voltage Last 12 Hours" data={voltageData} color="rgb(6, 182, 212)" />
-            <AreaChart title="Energy Consumption (7 Days)" data={energyData} color="rgb(34, 197, 94)" />
+          {/* LIVE CHARTS */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <LineChart title="PZEM-1 Voltage (Live)" data={pzem1Live} color="rgb(14, 165, 233)" height={320} />
+            <LineChart title="PZEM-2 Voltage (Live)" data={pzem2Live} color="rgb(251, 146, 60)" height={320} />
           </div>
 
-          {/* NILM */}
-          <div>
-            <NILMChart />
-          </div>
-
-          {/* Heatmap and Geo */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Heatmap />
-            <GeoMap />
-          </div>
-
-          {/* Anomalies and Insights */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <AreaChart title="Daily Energy (7 Days)" data={dailyEnergy} color="rgb(34, 197, 94)" height={320} />
             <AnomalyCard anomalies={anomalies} onAddEvent={addEvent} />
-            <InsightsCard />
           </div>
 
-          {/* Automation Rules */}
-          <AutomationRules onAddEvent={addEvent} />
-
-          {/* Event Log */}
           <EventLog events={events} />
         </main>
       </div>

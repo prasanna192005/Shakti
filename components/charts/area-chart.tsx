@@ -11,13 +11,14 @@ interface AreaChartProps {
   title: string
   data: DataPoint[]
   color: string
+  height?: number
 }
 
-export function AreaChart({ title, data, color }: AreaChartProps) {
+export function AreaChart({ title, data, color, height = 300 }: AreaChartProps) {
   return (
     <div className="rounded-2xl border border-border bg-card/80 backdrop-blur-sm p-6 shadow-lg">
       <h3 className="text-lg font-semibold mb-6">{title}</h3>
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={height}>
         <RechartsAreaChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
           <defs>
             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
