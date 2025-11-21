@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { GoogleGenerativeAI } from "@google/generative-ai"
 
 type Prediction = {
   title: string
@@ -16,7 +15,7 @@ interface PredictionsPageProps {
   onNavigate: (page: string) => void
   onLogout: () => void
   currentPage: string
-  readings: any[]      // <-- we get Firebase data here
+  readings: any[]
 }
 
 export function PredictionsPage({ onNavigate, onLogout, currentPage, readings }: PredictionsPageProps) {
@@ -26,69 +25,78 @@ export function PredictionsPage({ onNavigate, onLogout, currentPage, readings }:
 
   const getPredictions = async () => {
     try {
-// 1. Get the pool and clean it up
-    const keyPool = process.env.GEMINI_KEYS_POOL;
-    let selectedKey = process.env.GEMINI_PREDICTIONS_API_KEY; // Default fallback
+      const apiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY
 
-    // 2. If pool exists, pick a random one
-    if (keyPool) {
-      const keys = keyPool.split(',').map((k) => k.trim()).filter((k) => k);
-      if (keys.length > 0) {
-        selectedKey = keys[Math.floor(Math.random() * keys.length)];
+      if (!apiKey) {
+        throw new Error("Missing NEXT_PUBLIC_OPENROUTER_API_KEY")
       }
-    }
 
-    // 3. Safety check before initializing
-    if (!selectedKey) {
-      throw new Error("No Gemini API keys available in environment variables.");
-    }
-
-    // 4. Initialize with the random key
-    const genAI = new GoogleGenerativeAI(selectedKey);      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
-
-      // 🔥 REAL DATA from Firebase going to Gemini
+      // Slice readings (latest 40 entries)
       const recent = readings.slice(0, 40)
 
-      const prompt = `
-        You are an advanced ML model predicting smart grid behavior.
-        Use the following REAL LIVE ENERGY DATA from Firebase:
+      // Call OpenRouter (DeepSeek model)
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "http://localhost:3000",
+          "X-Title": "Smart Grid Predictor"
+        },
+        body: JSON.stringify({
+          model: "deepseek/deepseek-chat",
+            max_tokens: 200,        // <-- IMPORTANT FIX
 
-        ${JSON.stringify(recent, null, 2)}
+          messages: [
+            {
+              role: "system",
+              content: `You are an advanced ML model predicting smart grid behavior.
+              Return ONLY valid JSON. No markdown, no explanations.
+              
+              Predict the following based on the user's energy data:
+              {
+                "peakLoad": "<number> kW",
+                "energyDemand": "<number> kWh",
+                "stability": "<number>%",
+                "renewables": "<number> kW"
+              }
+              
+              Rules:
+              1. Predictions MUST vary based on the data.
+              2. Add ±5–12% natural ML variation.
+              3. Use actual patterns from the readings.`
+            },
+            {
+              role: "user",
+              content: `Here is the live energy data: ${JSON.stringify(recent)}`
+            }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 1.1,
+          stream: false
+        })
+      })
 
-        Based on trends, predict the following in STRICT JSON:
-        {
-          "peakLoad": "<number> kW",
-          "energyDemand": "<number> kWh",
-          "stability": "<number>%",
-          "renewables": "<number> kW"
-        }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(`OpenRouter API Error: ${response.status} ${JSON.stringify(errorData)}`)
+      }
 
-        The predictions MUST vary each time.
-        Add ±5–12% natural ML variation.
-        Use actual patterns from the readings.
-        NEVER return markdown or code fences.
-      `
+      const result = await response.json()
+      const text = result.choices[0].message.content
 
-      const result = await model.generateContent(prompt)
-      const text = result.response.text()
-
-      // CLEAN JSON
       const cleaned = text
         .replace(/```json/gi, '')
         .replace(/```/g, '')
         .trim()
 
-      const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) throw new Error("Invalid JSON from AI")
+      const data = JSON.parse(cleaned)
 
-      const data = JSON.parse(jsonMatch[0])
-
-      // FINAL CARD DATA
       setPredictions([
-        { title: "Peak Load (Next 6 Hours)", value: data.peakLoad, change: "+8% vs avg", tag: "ML Model v3.2" },
-        { title: "Energy Demand (Tomorrow)", value: data.energyDemand, change: "-2% vs yesterday", tag: "ML Model v3.2" },
-        { title: "Grid Stability Index", value: data.stability, change: "Normal range", tag: "ML Model v3.2" },
-        { title: "Renewable Generation (Next 4 Hours)", value: data.renewables, change: "Solar peak likely", tag: "ML Model v3.2" },
+        { title: "Peak Load (Next 6 Hours)", value: data.peakLoad, change: "+8% vs avg", tag: "DeepSeek via OpenRouter" },
+        { title: "Energy Demand (Tomorrow)", value: data.energyDemand, change: "-2% vs yesterday", tag: "DeepSeek via OpenRouter" },
+        { title: "Grid Stability Index", value: data.stability, change: "Normal range", tag: "DeepSeek via OpenRouter" },
+        { title: "Renewable Generation (Next 4 Hours)", value: data.renewables, change: "Solar peak likely", tag: "DeepSeek via OpenRouter" },
       ])
 
       setLoading(false)
@@ -114,7 +122,7 @@ export function PredictionsPage({ onNavigate, onLogout, currentPage, readings }:
 
         <main className="p-6 space-y-6">
           <h2 className="text-3xl font-bold">Predictive Analytics</h2>
-          <p className="text-muted-foreground">AI-powered forecasting using REAL smart grid data</p>
+          <p className="text-muted-foreground">AI-powered forecasting using real smart grid data (DeepSeek via OpenRouter)</p>
 
           {loading ? (
             <div className="flex items-center justify-center h-64">

@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const anomaly = body.anomaly || {};
     const phone_number = body.phone_number || '+918468845787';
 
-    const BLAND_KEY = process.env.BLAND_API_KEY;
+    const BLAND_KEY = process.env.PUBLIC_BLAND_API_KEY;
     if (!BLAND_KEY) {
       return NextResponse.json({ error: 'Bland API key not configured' }, { status: 500 });
     }
