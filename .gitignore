@@ -2,9 +2,10 @@ node_modules/
 .next/
 out/
 dist/
-
+.env
 .env.local
 .env.development
 .env.production
 .DS_Store
-.env
+.vscode/
+.idea/
