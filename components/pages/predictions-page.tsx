@@ -93,10 +93,10 @@ export function PredictionsPage({ onNavigate, onLogout, currentPage, readings }:
       const data = JSON.parse(cleaned)
 
       setPredictions([
-        { title: "Peak Load (Next 6 Hours)", value: data.peakLoad, change: "+8% vs avg", tag: "DeepSeek via OpenRouter" },
-        { title: "Energy Demand (Tomorrow)", value: data.energyDemand, change: "-2% vs yesterday", tag: "DeepSeek via OpenRouter" },
-        { title: "Grid Stability Index", value: data.stability, change: "Normal range", tag: "DeepSeek via OpenRouter" },
-        { title: "Renewable Generation (Next 4 Hours)", value: data.renewables, change: "Solar peak likely", tag: "DeepSeek via OpenRouter" },
+        { title: "Peak Load (Next 6 Hours)", value: data.peakLoad, change: "+8% vs avg", tag: "ML Model" },
+        { title: "Energy Demand (Tomorrow)", value: data.energyDemand, change: "-2% vs yesterday", tag: "ML Model" },
+        { title: "Grid Stability Index", value: data.stability, change: "Normal range", tag: "ML Model" },
+        { title: "Renewable Generation (Next 4 Hours)", value: data.renewables, change: "Solar peak likely", tag: "ML Model" },
       ])
 
       setLoading(false)
@@ -122,7 +122,7 @@ export function PredictionsPage({ onNavigate, onLogout, currentPage, readings }:
 
         <main className="p-6 space-y-6">
           <h2 className="text-3xl font-bold">Predictive Analytics</h2>
-          <p className="text-muted-foreground">AI-powered forecasting using real smart grid data (DeepSeek via OpenRouter)</p>
+          <p className="text-muted-foreground">AIML-powered forecasting using real smart grid data</p>
 
           {loading ? (
             <div className="flex items-center justify-center h-64">

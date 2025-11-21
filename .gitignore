@@ -7,3 +7,4 @@ dist/
 .env.development
 .env.production
 .DS_Store
+.env
